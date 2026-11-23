@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Simulating a cold plasma jet — Dr George Constandinides</title>
+<meta name="description" content="A helium plasma jet at atmospheric pressure, simulated in Ansys CFX with custom User Fortran routines and checked with an independent OpenFOAM model: gas flow, electric field, 16 species and the first electrons of a discharge.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Same design tokens as the portfolio (George_Constandinides_Portfolio_protected_2.html) */
+  :root{
+    --bg:#080B11; --bg-2:#0A0E16; --panel:#0D131D;
+    --line:rgba(255,255,255,0.085); --line-2:rgba(255,255,255,0.05);
+    --text:#E9EDF1; --muted:#98A4B1; --faint:#7D8999;
+    --cool:#35D6E0; --warm:#FFC24B; --hot:#FF5E3A; --cool-deep:#072329;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+  body{background:var(--bg);color:var(--text);font-family:"Hanken Grotesk",system-ui,sans-serif;
+       font-size:1.0625rem;line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  a{color:inherit}
+  :focus-visible{outline:2px solid var(--cool);outline-offset:3px;border-radius:2px}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+  .wrap{width:min(1100px, calc(100% - 32px));margin:0 auto}
+  .skip{position:absolute;left:-9999px;top:0;background:var(--cool);color:#000;padding:.5rem .8rem;z-index:100}
+  .skip:focus{left:16px;top:12px}
+
+  /* nav */
+  .nav{position:sticky;top:0;z-index:50;background:rgba(8,11,17,.86);backdrop-filter:blur(9px);border-bottom:1px solid var(--line-2)}
+  .nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.85rem 0}
+  .brand{font-family:"Space Grotesk",sans-serif;font-weight:600;text-decoration:none;letter-spacing:.01em}
+  .brand span{color:var(--cool)}
+  .nav ul{display:flex;gap:1.2rem;list-style:none;font-size:.82rem}
+  .nav ul a{text-decoration:none;color:var(--muted)}
+  .nav ul a:hover{color:var(--text)}
+  @media (max-width:760px){ .nav ul{display:none} }
+
+  /* hero */
+  .hero{padding:clamp(3.5rem,8vw,6.5rem) 0 clamp(2.5rem,5vw,4rem);
+        background:radial-gradient(1200px 500px at 85% -10%, rgba(53,214,224,.10), transparent 60%),
+                   radial-gradient(900px 400px at -10% 110%, rgba(255,94,58,.07), transparent 60%)}
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--cool);margin-bottom:1rem}
+  h1{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:clamp(2.1rem,5.2vw,3.6rem);line-height:1.08;letter-spacing:-.015em;max-width:20ch}
+  .lede{color:var(--muted);font-size:clamp(1.05rem,1.6vw,1.2rem);max-width:62ch;margin-top:1.2rem}
+  .tags{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1.4rem}
+  .tag{font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:.2rem .65rem}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1px;margin-top:2.4rem;
+         background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .stat{background:var(--panel);padding:1.1rem 1.2rem}
+  .stat .v{font-family:"Space Grotesk",sans-serif;font-size:1.7rem;font-weight:600;color:var(--text)}
+  .stat .v em{font-style:normal;color:var(--cool)}
+  .stat .k{font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--muted);margin-top:.2rem}
+
+  /* sections */
+  .section{padding:clamp(3rem,7vw,5.5rem) 0;border-top:1px solid var(--line-2)}
+  h2{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:clamp(1.55rem,3.2vw,2.3rem);line-height:1.15;letter-spacing:-.01em;margin-bottom:1.1rem;max-width:26ch}
+  h3{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:1.15rem;margin:1.6rem 0 .5rem}
+  .prose{max-width:68ch}
+  .prose p + p{margin-top:.9rem}
+  .prose ul{margin:.6rem 0 0 1.1rem}
+  .prose li{margin:.3rem 0}
+  .muted{color:var(--muted)}
+  .grid-2{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(1.5rem,4vw,3rem);align-items:start}
+  @media (max-width:920px){ .grid-2{grid-template-columns:1fr} }
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1rem;margin-top:1.4rem}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1.2rem 1.3rem}
+  .card .k{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--warm)}
+  .card h3{margin-top:.4rem}
+  .card p{color:var(--muted);font-size:.98rem}
+
+  /* note */
+  .note{border-left:3px solid var(--warm);background:rgba(255,194,75,.06);padding:.9rem 1.1rem;border-radius:0 10px 10px 0;margin-top:1.6rem;max-width:72ch}
+
+  /* links */
+  .btns{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1.6rem}
+  .btn{display:inline-flex;align-items:center;gap:.45rem;text-decoration:none;font-weight:600;font-size:.95rem;
+       padding:.65rem 1rem;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+  .btn.primary{background:var(--cool);color:#00191c;border-color:transparent}
+  .btn:hover{border-color:var(--cool)}
+
+  footer{border-top:1px solid var(--line-2);padding:2.2rem 0 3rem;color:var(--faint);font-size:.88rem}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:.6rem 1.5rem;justify-content:space-between}
+  footer a{color:var(--muted)}
+
+  /* additions for this page */
+  sup,sub{line-height:0}
+  .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  .hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:clamp(1.5rem,4vw,3rem);align-items:center}
+  @media (max-width:920px){ .hero-grid{grid-template-columns:1fr} }
+  .hero-media{margin:0 auto;width:100%;max-width:540px}
+  .vbox{position:relative}
+  /* the orbit video is 16:9 with the jet in its middle third: show a square crop of it, faded at the edges */
+  .hero-media video{display:block;width:100%;height:auto;aspect-ratio:1/1;object-fit:cover;object-position:50% 50%;
+    -webkit-mask-image:linear-gradient(to right,transparent,#000 8%,#000 92%,transparent),linear-gradient(to bottom,transparent,#000 3%,#000 78%,transparent);
+    -webkit-mask-composite:source-in;
+    mask-image:linear-gradient(to right,transparent,#000 8%,#000 92%,transparent),linear-gradient(to bottom,transparent,#000 3%,#000 78%,transparent);
+    mask-composite:intersect}
+  .hero-media figcaption{font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--muted);text-align:center;margin-top:.4rem}
+  .vtoggle{position:absolute;right:.5rem;bottom:.5rem;font:500 .72rem/1 "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;
+           color:var(--text);background:rgba(13,19,29,.8);border:1px solid var(--line);border-radius:999px;padding:.45rem .75rem;cursor:pointer}
+  .vtoggle:hover{border-color:var(--cool)}
+
+  /* pictures: the renders have their own dark background; the earlier-step plots are light */
+  .shot{margin:1.6rem 0 0}
+  .zoom{display:block;width:100%;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#000;
+        cursor:zoom-in;font:inherit;color:inherit}
+  .zoom:hover{border-color:rgba(53,214,224,.55)}
+  .zoom img{display:block;width:100%;height:auto}
+  .shot.light .zoom{background:#fff}
+  .shot figcaption,.vid figcaption{font-size:.9rem;color:var(--muted);margin-top:.6rem;max-width:72ch}
+  .shot figcaption .mono,.vid figcaption .mono{color:var(--cool);margin-right:.4rem}
+  .shot.mid{max-width:900px}
+  .shot.narrow{max-width:720px}
+  .gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2rem 1.4rem;margin-top:1.8rem}
+  @media (max-width:760px){ .gallery{grid-template-columns:1fr} }
+  .gallery h3{margin:0 0 .6rem}
+  .gallery h3 .n{font-family:"IBM Plex Mono",monospace;font-size:.8rem;font-weight:500;color:var(--cool);margin-right:.5rem}
+  .gallery .shot{margin-top:0}
+  .hint{font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--faint);margin-top:.7rem}
+  .vid{margin:1.8rem 0 0}
+  .vid video{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#000;border-radius:12px;border:1px solid var(--line)}
+
+  /* the model: layout drawing beside the facts */
+  .model-grid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:clamp(1.5rem,4vw,3rem);align-items:start;margin-top:1.4rem}
+  @media (max-width:920px){ .model-grid{grid-template-columns:1fr} .model-grid .shot{max-width:440px} }
+  .model-grid .shot{margin-top:0}
+  .facts{width:100%;border-collapse:collapse;font-size:.97rem}
+  .facts th,.facts td{text-align:left;vertical-align:top;padding:.55rem .6rem .55rem 0;border-bottom:1px solid var(--line)}
+  .facts th{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;
+            color:var(--muted);width:38%;padding-top:.72rem}
+  .notes{list-style:none;margin-top:1.3rem;color:var(--muted);font-size:.97rem}
+  .notes li{margin:.55rem 0}
+  .notes strong{color:var(--text);font-weight:600}
+
+  /* picture viewer */
+  .viewer{border:0;padding:0;margin:auto;background:transparent;color:var(--text);width:min(1600px,96vw);max-width:96vw;max-height:96vh}
+  .viewer::backdrop{background:rgba(4,6,10,.95)}
+  .viewer img{display:block;margin:0 auto;width:auto;height:auto;max-width:100%;max-height:84vh;border-radius:10px;background:#000}
+  .viewer img.light{background:#fff}
+  .viewer p{font-size:.9rem;color:var(--muted);margin:.7rem auto 0;max-width:80ch;text-align:center}
+  .viewer-close{position:absolute;top:.5rem;right:.5rem;font:500 .72rem/1 "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;
+                color:var(--text);background:rgba(13,19,29,.85);border:1px solid var(--line);border-radius:999px;padding:.5rem .8rem;cursor:pointer}
+  /* ---------- ANTI-COPY LAYER (as on the portfolio) ---------- */
+  ::selection{background:transparent;color:inherit}
+  ::-moz-selection{background:transparent;color:inherit}
+
+  /* ---------- CONTENT PROTECTION ---------- */
+  html,body{
+    -webkit-touch-callout:none;            /* no iOS long-press copy/save menu */
+  }
+  *{
+    -webkit-user-select:none;
+    -moz-user-select:none;
+    -ms-user-select:none;
+    user-select:none;
+  }
+  img{
+    -webkit-user-drag:none;
+    -khtml-user-drag:none;
+    -moz-user-drag:none;
+    -o-user-drag:none;
+    user-drag:none;
+  }
+
+  /* Contact card stays selectable & copyable so visitors can always reach these */
+  .clink,.clink *{
+    -webkit-user-select:text;
+    -moz-user-select:text;
+    -ms-user-select:text;
+    user-select:text;
+    -webkit-touch-callout:default;
+  }
+
+  /* Neutralise print / print-to-PDF text capture */
+  @media print{
+    body *{visibility:hidden !important}
+    body::before{
+      content:"This page is protected. © Dr. George Constandinides — please view it online.";
+      visibility:visible;position:fixed;inset:0;display:block;padding:3rem;
+      font-family:"IBM Plex Mono",monospace;font-size:14px;line-height:1.6;color:#000;
+    }
+  }
+
+  /* Copy-attempt toast */
+  .copy-guard{
+    position:fixed;left:50%;bottom:1.5rem;transform:translate(-50%,160%);
+    z-index:9999;max-width:min(90vw,440px);
+    display:flex;align-items:center;gap:.7rem;
+    padding:.8rem 1.1rem;border-radius:8px;
+    background:rgba(13,19,29,0.92);border:1px solid var(--line);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    box-shadow:0 12px 40px rgba(0,0,0,0.45);
+    font-family:"IBM Plex Mono",monospace;font-size:.78rem;letter-spacing:.03em;
+    color:var(--text);line-height:1.45;
+    opacity:0;pointer-events:none;
+    transition:opacity .3s ease,transform .35s cubic-bezier(.2,.7,.2,1);
+  }
+  .copy-guard.show{opacity:1;transform:translate(-50%,0)}
+  .copy-guard .cg-dot{
+    width:8px;height:8px;border-radius:50%;flex:none;
+    background:radial-gradient(circle at 30% 30%,var(--cool),var(--hot));
+  }
+  @media (prefers-reduced-motion: reduce){
+    .copy-guard{transition:opacity .2s ease;transform:translate(-50%,0)}
+    .copy-guard:not(.show){opacity:0}
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="https://ckleanth.github.io/George_Constandinides/">G. Constandinides<span>.</span></a>
+    <ul>
+      <li><a href="#jet">The jet</a></li>
+      <li><a href="#capabilities">Capabilities</a></li>
+      <li><a href="#physics">Physics</a></li>
+      <li><a href="#ionisation">Ionisation</a></li>
+      <li><a href="#checks">Checks</a></li>
+      <li><a href="#model">Model</a></li>
+      <li><a href="#credits">Credits</a></li>
+    </ul>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div>
+          <p class="eyebrow">Capability · plasma CFD</p>
+          <h1>Simulating a cold plasma jet</h1>
+          <p class="lede">A helium plasma jet at atmospheric pressure, simulated from the gas flow to the first electrons of the discharge. Ansys CFX, extended with custom User Fortran routines, solves the gas flow, the electric field and 16 reacting species; an independent OpenFOAM model checks the result on the same mesh.</p>
+          <div class="tags"><span class="tag">Ansys CFX 2025 R2</span><span class="tag">User Fortran</span><span class="tag">OpenFOAM v1912</span><span class="tag">Drift–diffusion plasma model</span><span class="tag">Plasma chemistry</span><span class="tag">BOLSIG+</span><span class="tag">ParaView</span></div>
+        </div>
+        <figure class="hero-media">
+          <div class="vbox">
+            <video id="hero-video" muted loop playsinline preload="auto" width="1920" height="1080" poster="assets/jet_3d_cutaway_orbit_poster.jpg" aria-label="A glass tube with a copper ring slowly rotating; the electron density inside it is visible through the glass.">
+              <source src="assets/jet_3d_cutaway_orbit.webm" type="video/webm">
+              <source src="assets/jet_3d_cutaway_orbit.mp4" type="video/mp4">
+            </video>
+            <button class="vtoggle" id="hero-toggle" type="button">Pause</button>
+          </div>
+          <figcaption>3D render of the CFX result 4.877 µs into the voltage pulse, coloured by electron density; a quarter of the geometry is cut away.</figcaption>
+        </figure>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="v"><em>2.5</em>×10<sup>17</sup></div><div class="k">peak electrons per m³ in the capillary, 4.88 µs into the pulse</div></div>
+        <div class="stat"><div class="v"><em>16</em> species</div><div class="k">electrons, eight ions, excited helium, N, O and ozone</div></div>
+        <div class="stat"><div class="v">10 µm</div><div class="k">smallest cells of a 25,024-cell axisymmetric mesh</div></div>
+        <div class="stat"><div class="v">2 codes</div><div class="k">Ansys CFX and an independent OpenFOAM model on the same mesh</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="jet">
+    <div class="wrap">
+      <div class="prose">
+        <p class="eyebrow">The device</p>
+        <h2>Helium, a glass capillary and a pulsed ring electrode</h2>
+        <p>A cold atmospheric-pressure plasma jet blows helium through a thin glass capillary into the open air. A pulsed high voltage on a ring electrode around the capillary drives the discharge: free electrons gain energy in the electric field and ionise the gas, so their number multiplies. In experiments, a front of ionisation, a "plasma bullet", then leaves the tube and travels to the target at about 10 km/s, while the gas itself flows at about 50 m/s. Such jets are studied for treating surfaces, materials and living tissue without heating them.</p>
+        <p>This work simulates such a jet in full, following the plasma model of a doctoral thesis from the University of Cyprus (Lazarou, 2019). It first solves the gas flow, helium mixing with air on its way to a dielectric target, and then the plasma on top of it: 16 species, their chemistry and the electric field in the gas, the glass and the target. The pictures show the first phase of a voltage pulse: as the electrode voltage rises, electrons multiply inside the capillary, just below the electrode.</p>
+      </div>
+      <figure class="shot">
+        <button class="zoom" type="button" aria-label="Enlarge Fig. 1"><img src="assets/jet_electron_density.jpg" width="1920" height="1080" alt="Cross-section of a glass tube above a grey target; a glowing orange region fills the top of the tube's bore." loading="lazy" decoding="async"></button>
+        <figcaption><span class="mono">Fig. 1</span>Electron density across the whole gap at t = 4.877 µs, with 2.67 kV on the electrode: the plasma forms inside the capillary, and the 2 mm gap to the fused-quartz target is still dark.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section" id="capabilities">
+    <div class="wrap">
+      <p class="eyebrow">What it demonstrates</p>
+      <h2>Four capabilities in one simulation</h2>
+      <div class="cards">
+        <div class="card"><div class="k">Coupled physics</div><h3>Gas flow and plasma</h3><p>The helium–air jet is solved first. The plasma model then runs on the computed flow and gas mixture, from inside the capillary to the target.</p></div>
+        <div class="card"><div class="k">Solver development</div><h3>A plasma model inside CFX</h3><p>Ansys CFX has no plasma model of its own. Custom User Fortran routines were developed for it to carry the charged species and their coupling to the electric field.</p></div>
+        <div class="card"><div class="k">Fields through materials</div><h3>Gas, glass and target</h3><p>The electric potential is solved through the gas, the glass capillary and the dielectric target, and charge collects on the dielectric surfaces.</p></div>
+        <div class="card"><div class="k">Cross-checking</div><h3>Two independent codes</h3><p>A second model of the same equations, built in OpenFOAM, runs on the same mesh and finds the same ionised region.</p></div>
+      </div>
+      <p class="muted" style="margin-top:1.4rem;max-width:68ch">The development behind these results, still in progress, has its own page: <a href="https://ckleanth.github.io/Plasma_CFD/">Low-temperature plasma CFD in two codes ↗</a></p>
+    </div>
+  </section>
+
+  <section class="section" id="physics">
+    <div class="wrap">
+      <p class="eyebrow">The physics</p>
+      <h2>The physics in four pictures</h2>
+      <p class="prose muted">The gas flow is solved first, as a steady flow, because the gas moves far more slowly than the discharge. The three plasma fields are from one moment, 4.877 µs into the voltage pulse, with 2.67 kV on the electrode.</p>
+      <p class="hint">Select any picture to enlarge it.</p>
+      <div class="gallery">
+        <div>
+          <h3><span class="n">01</span>The gas flow</h3>
+          <figure class="shot">
+            <button class="zoom" type="button" aria-label="Enlarge Fig. 2"><img src="assets/jet_helium_flow.jpg" width="1920" height="1080" alt="A white column of helium flowing down from a tube onto a grey plate, surrounded by blue air and curved white streamlines." loading="lazy" decoding="async"></button>
+            <figcaption><span class="mono">Fig. 2</span>Pure helium leaves the capillary at up to 52 m/s, draws the surrounding air into the jet and spreads over the target (streamlines; colour: helium fraction). The plasma model runs on this flow.</figcaption>
+          </figure>
+        </div>
+        <div>
+          <h3><span class="n">02</span>The electric field</h3>
+          <figure class="shot">
+            <button class="zoom" type="button" aria-label="Enlarge Fig. 3"><img src="assets/jet_electric_potential.jpg" width="1920" height="1080" alt="Colour map of electric potential, yellow near a tube and dark purple far away, with curved white equipotential lines." loading="lazy" decoding="async"></button>
+            <figcaption><span class="mono">Fig. 3</span>Electric potential, with lines every 100 V: the field of the ring electrode reaches through the glass into the helium-filled bore.</figcaption>
+          </figure>
+        </div>
+        <div>
+          <h3><span class="n">03</span>The electrons</h3>
+          <figure class="shot">
+            <button class="zoom" type="button" aria-label="Enlarge Fig. 4"><img src="assets/jet_electron_density_closeup.jpg" width="1920" height="1080" alt="Close-up cross-section of a tube bore filled with a yellow-orange glow that is brightest just below a copper strip." loading="lazy" decoding="async"></button>
+            <figcaption><span class="mono">Fig. 4</span>Where the plasma starts: the densest electrons, 2.5×10<sup>17</sup> per m<sup>3</sup>, sit just below the lower edge of the ring electrode.</figcaption>
+          </figure>
+        </div>
+        <div>
+          <h3><span class="n">04</span>Their energy</h3>
+          <figure class="shot">
+            <button class="zoom" type="button" aria-label="Enlarge Fig. 5"><img src="assets/jet_mean_electron_energy.jpg" width="1920" height="1080" alt="Colour map in purple and orange: an orange helium column below a tube, bright spots at the electrode's edges." loading="lazy" decoding="async"></button>
+            <figcaption><span class="mono">Fig. 5</span>Mean electron energy: highest at the edge of the ring electrode, high in the helium column, and low in the surrounding air, where electrons lose their energy fast.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="ionisation">
+    <div class="wrap">
+      <div class="prose">
+        <p class="eyebrow">Ionisation</p>
+        <h2>Watching the plasma start</h2>
+        <p>The time-lapse has one frame for each hour of computation, from 0.15 to 4.88 µs into the voltage pulse. The seed electrons first fade; then, as the electrode voltage rises, electrons multiply below the ring electrode. Between 4.01 and 4.88 µs the voltage rises from 2.20 to 2.67 kV, and the peak electron density from 4.2×10<sup>13</sup> to 2.5×10<sup>17</sup> per m<sup>3</sup>.</p>
+      </div>
+      <figure class="vid">
+        <video controls muted playsinline preload="none" width="1920" height="1080" poster="assets/jet_ionisation_timelapse_poster.jpg" aria-label="Animation of a tube cross-section: a purple glow fades, then an orange-yellow glow grows below a copper strip; a small graph shows the voltage rising.">
+          <source src="assets/jet_ionisation_timelapse.webm" type="video/webm">
+          <source src="assets/jet_ionisation_timelapse.mp4" type="video/mp4">
+        </video>
+        <figcaption><span class="mono">Video</span>Electron density inside the capillary, 90 frames from t = 0.15 to 4.88 µs; the inset graph follows the electrode voltage. 13 s, no sound.</figcaption>
+      </figure>
+      <figure class="shot">
+        <button class="zoom" type="button" aria-label="Enlarge Fig. 6"><img src="assets/jet_ionisation_growth.jpg" width="3146" height="1080" alt="Four tube cross-sections side by side, the glow inside growing brighter from left to right, with times underneath." loading="lazy" decoding="async"></button>
+        <figcaption><span class="mono">Fig. 6</span>Four moments of the same simulation: from 4.01 to 4.88 µs the electrode voltage rises from 2.20 to 2.67 kV, and the peak electron density from 4.2×10<sup>13</sup> to 2.5×10<sup>17</sup> per m<sup>3</sup>.</figcaption>
+      </figure>
+      <div class="note"><strong>Status on 23 November 2026.</strong> The CFX simulation had made about 31,000 time steps and reached 4.88 µs, two thirds of the way up the 7.3 µs voltage rise. The plasma had not yet left the capillary. The run continues.</div>
+    </div>
+  </section>
+
+  <section class="section" id="checks">
+    <div class="wrap">
+      <p class="eyebrow">Checks</p>
+      <h2>Two independent codes, one plasma</h2>
+      <div class="grid-2">
+        <div class="prose">
+          <p>In CFX the plasma runs in custom User Fortran routines on four processor cores, with a time step set by the ionisation rate.</p>
+          <p>A second model of the same equations, built on the ltpFoam solver of OpenFOAM v1912, runs on the same mesh. At 3.80 µs both codes show the same ionised region below the electrode, with peak electron densities of 1.43×10<sup>13</sup> per m<sup>3</sup> in CFX and 1.27×10<sup>13</sup> per m<sup>3</sup> in OpenFOAM.</p>
+          <p>The structured mesh has 25,024 cells in the axisymmetric section, graded to 10 µm at the walls.</p>
+        </div>
+        <figure class="shot" style="margin-top:0">
+          <button class="zoom" type="button" aria-label="Enlarge Fig. 7"><img src="assets/cfx_vs_openfoam.jpg" width="1920" height="1080" alt="A tube cross-section whose left and right halves, from two different codes, show the same bullet-shaped glow." loading="lazy" decoding="async"></button>
+          <figcaption><span class="mono">Fig. 7</span>Electron density at t = 3.80 µs: left half from Ansys CFX, right half from the independent OpenFOAM model on the same mesh.</figcaption>
+        </figure>
+      </div>
+      <figure class="shot">
+        <button class="zoom" type="button" aria-label="Enlarge Fig. 8"><img src="assets/jet_mesh_and_electrons.jpg" width="1920" height="1080" alt="Split image: on the left a glowing tube cross-section, on the right a dense blue grid of mesh lines." loading="lazy" decoding="async"></button>
+        <figcaption><span class="mono">Fig. 8</span>The computational mesh, structured and graded to 10 µm at the walls, beside the electron density it resolves.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section" id="model">
+    <div class="wrap">
+      <p class="eyebrow">The model</p>
+      <h2>What is modelled</h2>
+      <div class="model-grid">
+        <figure class="shot">
+          <button class="zoom" type="button" aria-label="Enlarge Fig. 9"><img src="assets/jet_model_layout.jpg" width="1080" height="1440" alt="Labelled diagram of the model: a tube with an electrode at the top, a gap, a grey target and a region below it." loading="lazy" decoding="async"></button>
+          <figcaption><span class="mono">Fig. 9</span>Layout of the 2D axisymmetric model: helium flows down the glass capillary past the ring electrode, crosses a 2 mm gap of air and strikes a 1 mm dielectric target; the outer wall and the bottom are grounded.</figcaption>
+        </figure>
+        <div>
+          <table class="facts">
+            <caption class="sr">The modelled plasma jet in figures</caption>
+            <tbody>
+              <tr><th scope="row">Capillary</th><td>soda-lime glass, 0.9 mm bore</td></tr>
+              <tr><th scope="row">Ring electrode</th><td>copper, 1 mm long</td></tr>
+              <tr><th scope="row">Gap to target</th><td>2 mm</td></tr>
+              <tr><th scope="row">Target</th><td>fused quartz, 1 mm</td></tr>
+              <tr><th scope="row">Gas</th><td>helium, 1 slm</td></tr>
+              <tr><th scope="row">Voltage pulse</th><td>4.0 kV, 7.3 µs rise</td></tr>
+              <tr><th scope="row">Pulse rate</th><td>10 kHz, 50 µs long</td></tr>
+              <tr><th scope="row">Mesh</th><td>25,024 cells, 2D axisymmetric</td></tr>
+              <tr><th scope="row">Smallest cells</th><td>10 µm</td></tr>
+              <tr><th scope="row">Codes</th><td>Ansys CFX 2025 R2, OpenFOAM v1912</td></tr>
+            </tbody>
+          </table>
+          <ul class="notes">
+            <li><strong>Device.</strong> The thesis's experiment: a capillary of 0.9 mm inner and 1.35 mm outer diameter, a copper-tape electrode 1.5 mm from the exit and a fused-quartz target 2 mm from the exit. The relative permittivities are 4.2 for the glass and 8 for the target.</li>
+            <li><strong>Gas flow.</strong> Laminar, up to 52 m/s on the axis, with helium mixing into the surrounding air.</li>
+            <li><strong>Plasma.</strong> A drift–diffusion fluid model with an electron energy equation and 16 species: electrons; the ions He<sup>+</sup>, He<sub>2</sub><sup>+</sup>, N<sub>2</sub><sup>+</sup>, N<sub>4</sub><sup>+</sup>, O<sub>2</sub><sup>+</sup>, O<sub>4</sub><sup>+</sup>, O<sup>-</sup> and O<sub>2</sub><sup>-</sup>; four excited states of helium atoms and molecules; and the atoms N and O, and ozone.</li>
+            <li><strong>Field.</strong> The electric potential is solved in the gas, the glass and the target, and charge collects on the dielectric surfaces.</li>
+            <li><strong>Electron data.</strong> Transport and rate coefficients from the Boltzmann solver BOLSIG+, with cross sections from LXCat.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="steps">
+    <div class="wrap">
+      <div class="prose">
+        <p class="eyebrow">Built step by step</p>
+        <h2>Before the jet: a barrier discharge</h2>
+        <p>The model was built up on simpler cases first: the gas flow of a simpler helium jet, an electron avalanche checked against its analytic solution, and a parallel-plate dielectric barrier discharge in helium, also run in both codes. The barrier discharge shows the structure that a discharge model must resolve: a thin cathode fall, with a strong field and energetic electrons, beside a quasi-neutral plasma.</p>
+      </div>
+      <figure class="shot light mid">
+        <button class="zoom" type="button" aria-label="Enlarge Fig. 10"><img src="assets/dbd_device.png" width="1890" height="525" alt="Schematic of two parallel electrodes, each covered by a dielectric layer, with a helium-filled gap between them and a pulsed voltage source." loading="lazy" decoding="async"></button>
+        <figcaption><span class="mono">Fig. 10</span>The barrier discharge: helium with 1 ppm of nitrogen at 350 K and 101.3 kPa in a 5 mm gap between two 1 mm dielectric layers, driven by voltage pulses of 3 kV at 2 kHz.</figcaption>
+      </figure>
+      <figure class="shot light narrow">
+        <button class="zoom" type="button" aria-label="Enlarge Fig. 11"><img src="assets/dbd_discharge_structure.png" width="1890" height="1890" alt="Four stacked plots across the 5 mm gap: densities, potential, electric field and mean electron energy, with a shaded cathode-fall region at the left." loading="lazy" decoding="async"></button>
+        <figcaption><span class="mono">Fig. 11</span>Structure of the discharge across the gap, from the CFX model: (a) electron and positive-ion densities, (b) potential, (c) electric field and (d) mean electron energy. The cathode fall (shaded) holds the strong field and the energetic electrons; the rest of the gap is a quasi-neutral plasma.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section" id="credits">
+    <div class="wrap">
+      <div class="prose">
+        <p class="eyebrow">Sources and status</p>
+        <h2>Credits</h2>
+        <ul>
+          <li><strong>Reference case.</strong> C. Lazarou, <em>Numerical simulation of helium atmospheric pressure plasma</em>, PhD thesis, Department of Electrical and Computer Engineering, University of Cyprus, 2019. The device, its dimensions and the plasma model follow this thesis; the simulations and pictures on this page are new.</li>
+          <li><strong>Electron data.</strong> BOLSIG+ (G. J. M. Hagelaar and L. C. Pitchford, <em>Plasma Sources Sci. Technol.</em> 14, 722, 2005), with cross sections from LXCat (www.lxcat.net): the SIGLO database supplied with BOLSIG+; and, retrieved on 9 November 2026, the IST-Lisbon helium set (L. L. Alves, <em>J. Phys.: Conf. Ser.</em> 565, 012007, 2014; M. Santos, C. Noel, T. Belmonte and L. L. Alves, <em>J. Phys. D: Appl. Phys.</em> 47, 265201, 2014) and the TRINITI database's ionisation of metastable helium (J. N. Dixon et al., <em>J. Phys. B</em> 9, 1267, 1976).</li>
+          <li><strong>Ion data.</strong> Ion mobilities from the Viehland database on LXCat (L. A. Viehland and C. C. Kirkpatrick, <em>Int. J. Mass Spectrom. Ion Proc.</em> 149/150, 555, 1995), retrieved on 9 November 2026, and from the open literature.</li>
+          <li><strong>Software.</strong> Ansys CFX 2025 R2 and OpenFOAM v1912 for the simulations; ParaView, matplotlib and FFmpeg for the pictures and videos.</li>
+          <li><strong>Status.</strong> A simulation in progress, not yet published in a journal. The pictures show simulation results, not measurements.</li>
+        </ul>
+      </div>
+      <div class="btns">
+        <a class="btn primary" href="https://ckleanth.github.io/George_Constandinides/">Portfolio ↗</a>
+        <a class="btn" href="https://ckleanth.github.io/Plasma_CFD/">The development behind it ↗</a>
+        <a class="btn" href="https://ckleanth.github.io/CFD_Applied_Thermodynamics/">CFD in Applied Thermodynamics ↗</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Dr George Constandinides</span>
+    <span><a href="https://ckleanth.github.io/George_Constandinides/">Portfolio</a> · <a href="https://www.youtube.com/ckleanth">YouTube</a> · <a href="https://www.linkedin.com/in/georgeconstandinides/">LinkedIn</a></span>
+  </div>
+</footer>
+
+<dialog class="viewer" id="viewer" aria-label="Enlarged picture">
+  <button class="viewer-close" type="button">Close</button>
+  <img id="viewer-img" alt="">
+  <p id="viewer-cap"></p>
+</dialog>
+
+<script>
+/* Hero loop: plays only when motion is welcome and the video is on screen; the button pauses and resumes it. */
+(function(){
+  var v=document.getElementById('hero-video'), b=document.getElementById('hero-toggle');
+  if(!v||!b) return;
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var on=!reduce, seen=true;
+  function sync(){
+    if(on&&seen){ var p=v.play(); if(p&&p.catch) p.catch(function(){}); } else { v.pause(); }
+    b.textContent=on?'Pause':'Play';
+    b.setAttribute('aria-label', on?'Pause the animation':'Play the animation');
+  }
+  b.addEventListener('click',function(){ on=!on; sync(); });
+  if('IntersectionObserver' in window){
+    new IntersectionObserver(function(es){ seen=es[0].isIntersecting; sync(); },{threshold:0.1}).observe(v);
+  }
+  sync();
+})();
+/* Picture viewer: a picture opens enlarged with its caption; a click, the button or Escape closes it. */
+(function(){
+  var d=document.getElementById('viewer');
+  if(!d||typeof d.showModal!=='function') return;
+  var im=document.getElementById('viewer-img'), cap=document.getElementById('viewer-cap');
+  Array.prototype.forEach.call(document.querySelectorAll('button.zoom'),function(btn){
+    btn.addEventListener('click',function(){
+      var i=btn.querySelector('img'), f=btn.closest('figure'), c=f?f.querySelector('figcaption'):null;
+      var lab=c?c.querySelector('.mono'):null, t=c?c.textContent:'';
+      im.src=i.currentSrc||i.src; im.alt=i.alt;
+      im.className=(f&&f.classList.contains('light'))?'light':'';
+      cap.textContent=lab?lab.textContent+' · '+t.slice(lab.textContent.length):t;
+      d.showModal();
+    });
+  });
+  d.addEventListener('click',function(e){ if(e.target!==cap) d.close(); });
+  d.addEventListener('close',function(){ im.removeAttribute('src'); });
+})();
+</script>
+<script>
+/* ---------- Content protection + reliable contact actions ---------- */
+(function(){
+  var NOTICE = '\u00A9 Dr. George Constandinides \u2014 Mechanical Engineer.\n'
+             + 'This content is protected.';
+  function attribution(){
+    var http = (location.protocol === 'http:' || location.protocol === 'https:');
+    return NOTICE + (http ? '\nOriginal: ' + location.href : '');
+  }
+
+  /* The contact card is deliberately exempt — visitors must be able to reach these */
+  function inContact(node){
+    while(node){
+      if(node.nodeType === 1 && node.classList && node.classList.contains('clink')) return true;
+      node = node.parentNode;
+    }
+    return false;
+  }
+  function selectionInContact(){
+    var sel = window.getSelection && window.getSelection();
+    if(!sel || sel.rangeCount === 0) return false;
+    return inContact(sel.anchorNode) || inContact(sel.focusNode);
+  }
+
+  /* Restrained toast, built from the page's own tokens */
+  var toast, msgEl, hideTimer;
+  var DEFAULT_MSG = 'This content is protected and can\u2019t be copied.';
+  function flash(text){
+    if(!toast){
+      toast = document.createElement('div');
+      toast.className = 'copy-guard';
+      toast.setAttribute('role','status');
+      toast.setAttribute('aria-live','polite');
+      var dot = document.createElement('span');
+      dot.className = 'cg-dot'; dot.setAttribute('aria-hidden','true');
+      msgEl = document.createElement('span');
+      toast.appendChild(dot); toast.appendChild(msgEl);
+      document.body.appendChild(toast);
+    }
+    msgEl.textContent = text || DEFAULT_MSG;
+    toast.classList.add('show');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(function(){ toast.classList.remove('show'); }, 2600);
+  }
+
+  /* Clipboard write that works on https AND file:// */
+  var allowCopyOnce = false;            /* lets our own copy bypass the poison below */
+  function legacyCopy(text){
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly','');
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;user-select:text;-webkit-user-select:text';
+    document.body.appendChild(ta);
+    ta.select(); try{ ta.setSelectionRange(0, text.length); }catch(_){}
+    var ok = false;
+    try{ allowCopyOnce = true; ok = document.execCommand('copy'); }catch(_){ ok = false; }
+    allowCopyOnce = false;
+    document.body.removeChild(ta);
+    return ok;
+  }
+  function copyText(text){
+    if(navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
+      return navigator.clipboard.writeText(text)
+        .then(function(){ return true; })
+        .catch(function(){ return legacyCopy(text); });
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+
+  /* Anything that still reaches the clipboard is replaced with an attribution notice */
+  function poison(e){
+    if(allowCopyOnce) return;            /* our own programmatic copy */
+    if(selectionInContact()) return;     /* allow copying contact details */
+    var cd = e.clipboardData || window.clipboardData;
+    if(cd){
+      try{
+        cd.setData('text/plain', attribution());
+        cd.setData('text/html', '<p>' + attribution().replace(/\n/g,'<br>') + '</p>');
+      }catch(_){}
+    }
+    e.preventDefault();
+    flash();
+  }
+  document.addEventListener('copy', poison, true);
+  document.addEventListener('cut',  poison, true);
+
+  /* Close the obvious extraction paths (contact card exempted) */
+  document.addEventListener('contextmenu', function(e){ if(inContact(e.target)) return; e.preventDefault(); flash(); }, true);
+  document.addEventListener('dragstart',   function(e){ e.preventDefault(); }, true);
+  document.addEventListener('selectstart', function(e){ if(inContact(e.target)) return; e.preventDefault(); }, true);
+
+  /* Shortcuts: copy / cut / select-all / save / view-source / print, plus a light devtools deterrent */
+  document.addEventListener('keydown', function(e){
+    var k = (e.key || '').toLowerCase();
+    var mod = e.ctrlKey || e.metaKey;
+    if(mod && ['c','x','a','s','u','p'].indexOf(k) !== -1){
+      if((k === 'c' || k === 'x') && selectionInContact()) return;   /* allow copying contact details */
+      e.preventDefault();
+      if(k === 'c' || k === 'x' || k === 'a') flash();
+      return;
+    }
+    if(e.key === 'F12'){ e.preventDefault(); return; }
+    if(mod && e.shiftKey && ['i','j','c'].indexOf(k) !== -1){ e.preventDefault(); }
+  }, true);
+
+  /* Reliable email: native mailto still fires for anyone with a mail client;
+     we also copy the address as a guaranteed fallback for those without one. */
+  function initMail(){
+    var links = document.querySelectorAll('a[href^="mailto:"]');
+    Array.prototype.forEach.call(links, function(a){
+      a.addEventListener('click', function(){
+        var addr = (a.getAttribute('href') || '').replace(/^mailto:/i,'').split('?')[0];
+        if(!addr) return;
+        /* No preventDefault: if a handler is registered, the mail client opens. */
+        copyText(addr).then(function(ok){
+          flash(ok ? 'Email address copied \u2014 opening your mail app\u2026 (paste it if nothing opens)'
+                   : 'Email: ' + addr);
+        });
+      });
+    });
+  }
+  if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', initMail); }
+  else{ initMail(); }
+})();
+</script>
+</body>
+</html>
